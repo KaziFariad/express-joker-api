@@ -1,73 +1,101 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const jokes = require('../../Jokes');
-let latestId = 0;
+const Joke = require('../../models/Joke');
 
-const idFilter = (req) => (joke) => joke.id === parseInt(req.params.id);
-const maxIdFinder = () => {
-  let max = latestId;
-  jokes.forEach((joke) => {
-    if (joke.id > max) {
-      max = joke.id;
-    }
-    // console.log(max);
+router
+  .route('/')
+  // get all jokes
+  .get(async (req, res) => {
+    res.send(await Joke.find());
+  })
+
+  // submit a joke
+  .post(async (req, res) => {
+    const joke = new Joke(req.body);
+    await joke.save();
+    res.status(201).send(joke);
   });
-  return max;
-};
 
-// get all jokes
-router.get('/', (req, res) => res.send(jokes));
+router
+  .route('/:id')
 
-// get joke by id
-router.get('/:id', (req, res) => {
-  const found = jokes.some(idFilter(req));
-
-  found
-    ? res.send(jokes.filter(idFilter(req)))
-    : res.status(400).send('No joke found with the id');
-});
-
-// submit a new joke
-router.post('/', (req, res) => {
-  const newJoke = {
-    id: maxIdFinder() + 1,
-    category: req.body.category || 'general',
-    ...req.body,
-  };
-  latestId = parseInt(newJoke.id);
-  jokes.push(newJoke);
-  res.send(jokes);
-});
-
-// update joke
-router.put('/:id', (req, res) => {
-  const found = jokes.some(idFilter(req));
-
-  if (found) {
-    jokes.forEach((joke, i) => {
-      if (idFilter(req)(joke)) {
-        const updjoke = { ...joke, ...req.body };
-        jokes[i] = updjoke;
-        res.json({ msg: 'joke updated', updjoke });
+  // get joke by Id
+  .get((req, res) => {
+    Joke.findById(req.params.id, (err, doc) => {
+      if (err) {
+        res.status(500).send(err);
+        return;
       }
+      if (doc) {
+        res.send(doc);
+        return;
+      }
+      res.status(404).json({
+        message: 'joke with id ' + req.params.id + ' was not found.',
+      });
     });
-  } else {
-    res.status(400).json({ msg: `No joke with the id of ${req.params.id}` });
-  }
-});
+  })
 
-// delete a joke
-router.delete('/:id', (req, res) => {
-  const found = jokes.some(idFilter(req));
-
-  if (found) {
-    res.json({
-      msg: 'joke deleted',
-      jokes: jokes.filter((joke) => !idFilter(req)(joke)),
+  // update a joke
+  .put((req, res) => {
+    Joke.findByIdAndUpdate(req.params.id, req.body, (err, doc) => {
+      if (err) {
+        res.status(500).send(err);
+        return;
+      }
+      if (doc) {
+        res.send(`Joke with id: ${req.params.id} was updated`);
+        return;
+      }
+      res.status(404).json({
+        message: 'joke with id ' + req.params.id + ' was not found.',
+      });
     });
-  } else {
-    res.status(400).json({ msg: `No joke with the id of ${req.params.id}` });
-  }
-});
+  })
+
+  // edit a joke
+  .patch((req, res) => {
+    const joke = { ...req.body };
+    Joke.findByIdAndUpdate(req.params.id, { $set: joke }, (error, doc) => {
+      if (error) {
+        res.status(500).send(error);
+        return;
+      }
+      if (doc) {
+        Joke.findById(req.params.id, (err, doc) => {
+          if (error) {
+            res.status(500).send(error);
+            return;
+          }
+
+          res.send(doc);
+        });
+        return;
+      }
+
+      res.status(404).json({
+        message: 'joke with id ' + req.params.id + ' was not found.',
+      });
+    });
+  })
+
+  // delete a joke
+  .delete((req, res) => {
+    Joke.findByIdAndDelete(req.params.id, (err, doc) => {
+      if (err) {
+        res.status(500).send(err);
+        return;
+      }
+      if (doc) {
+        res.send(`Joke with id: ${req.params.id} was deleted`);
+        return;
+      }
+      res.status(404).json({
+        message: 'joke with id ' + req.params.id + ' was not found.',
+      });
+    });
+  });
 
 module.exports = router;
